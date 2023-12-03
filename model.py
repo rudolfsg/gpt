@@ -10,35 +10,54 @@ class Attention(nn.Module):
         self.W_k = nn.Linear(original_dim, hidden_dim)
         self.W_v = nn.Linear(original_dim, hidden_dim)
 
-    def mask(self, x):
-        pass
+    def mask(self, score):
+        mask = torch.tril(torch.ones(score.shape)).type(torch.uint8)
+        score = score.masked_fill(mask == 0, -1e9)
+        return score 
     
     def forward(self, x):
         q = self.W_q(x)
         k = self.W_k(x)
         v = self.W_v(x)
-        # softmax dim?
-        score = F.softmax(torch.bmm(q, k.transpose(1, 2)) / (self.hidden_dim ** 0.5), dim=-1)
+
+        score = torch.bmm(q, k.transpose(1, 2)) / (self.hidden_dim ** 0.5)
         score = self.mask(score)
-        return score @ v
+        score = F.softmax(score, dim=-1)
+        return torch.bmm(score, v)
 
+class FeedForward(nn.Module):
 
+    def __init__(self, hidden_dim, ff_dim):
+        super().__init__()
+        self.w_1 = nn.Linear(hidden_dim, ff_dim)
+        self.w_2 = nn.Linear(ff_dim, hidden_dim)
+
+    def forward(self, x):
+        return self.w_2(self.w_1(x).relu())
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, n_heads, hidden_dim):
+    def __init__(self, n_heads, hidden_dim, ffn_dim):
         assert hidden_dim % n_heads == 0
         super().__init__()
         self.layers = nn.ModuleList([
             Attention(original_dim=hidden_dim, hidden_dim=hidden_dim // n_heads)
             for _ in range(n_heads)
         ])
+        self.ffn = FeedForward(hidden_dim, ffn_dim)
+        self.ln1 = nn.LayerNorm(hidden_dim)
+        self.ln2 = nn.LayerNorm(hidden_dim)
+
     
     def forward(self, x):
-        return torch.cat([layer(x) for layer in self.layers], dim=-1)
+        y = torch.cat([layer(x) for layer in self.layers], dim=-1)
+        x = self.ln1(x + y)
+        y = self.ffn(x)
+        x = self.ln2(x + y)
+        return x
         
 
 class Transformer(nn.Module):
-    def __init__(self, n_heads, n_layers, hidden_dim, vocab_size) -> None:
+    def __init__(self, n_heads, n_layers, hidden_dim, vocab_size, ffn_dim):
         super().__init__()
 
         self.n_layers = n_layers
@@ -46,7 +65,7 @@ class Transformer(nn.Module):
         self.embedding = nn.Embedding(vocab_size, hidden_dim)
 
         self.layers = nn.ModuleList([
-            MultiHeadAttention(n_heads, hidden_dim)
+            MultiHeadAttention(n_heads, hidden_dim, ffn_dim=ffn_dim)
             for _ in range(n_layers)
         ])
 
@@ -61,37 +80,16 @@ class Transformer(nn.Module):
         return x + pos[None, :, :]
 
     def forward(self, x):
-        x = self.embedding(x)
+        x = self.embedding(x) * (self.hidden_dim ** 0.5)
         x = self.positional_encoding(x)
 
         for layer in self.layers:
-            y = layer(x)
-            x = nn.LayerNorm(x + y)
-
-            y = nn.FFN(x)  # TODO
-            x = nn.LayerNorm(x + y)
-        x = self.w(x)  # TODO: apply to the last token of the squence
+            x = layer(x)
+ 
+        x = self.w(x) 
         x = F.softmax(x, dim=-1)
         return x 
-        
-import json
-### Load vocab
-with open("vocab.json", "r") as f:
-    vocab = json.load(f)
-with open("data.json", "r") as f:
-    data = json.load(f)
-
-max_seq_len = 5
-batch_size = 2
-vocab_size= 256
-
-x = []
-for i in range(batch_size):
-    x.append(data[i * max_seq_len: (i + 1) * max_seq_len])
-x = torch.tensor(x)
-
-model = Transformer(n_heads=4, n_layers=4, hidden_dim=16, vocab_size=vocab_size)
-model(x)
+    
 
 
 
