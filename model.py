@@ -31,9 +31,13 @@ class FeedForward(nn.Module):
         super().__init__()
         self.w_1 = nn.Linear(hidden_dim, ff_dim)
         self.w_2 = nn.Linear(ff_dim, hidden_dim)
+        self.gelu = nn.GELU()
 
     def forward(self, x):
-        return self.w_2(self.w_1(x).relu())
+        x = self.w_1(x)
+        x = self.gelu(x)
+        x = self.w_2(x) 
+        return x
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, n_heads, hidden_dim, ffn_dim):
@@ -47,12 +51,13 @@ class MultiHeadAttention(nn.Module):
         self.ln1 = nn.LayerNorm(hidden_dim)
         self.ln2 = nn.LayerNorm(hidden_dim)
 
+    def attn(self, x):
+        return torch.cat([layer(x) for layer in self.layers], dim=-1)
+
     
     def forward(self, x):
-        y = torch.cat([layer(x) for layer in self.layers], dim=-1)
-        x = self.ln1(x + y)
-        y = self.ffn(x)
-        x = self.ln2(x + y)
+        x = x + self.attn(self.ln1(x))
+        x = x + self.ffn(self.ln2(x))
         return x
         
 
@@ -69,7 +74,11 @@ class Transformer(nn.Module):
             for _ in range(n_layers)
         ])
 
+        self.ln = nn.LayerNorm(hidden_dim)
         self.w = nn.Linear(hidden_dim, vocab_size)
+
+        # Weight tying
+        self.embedding.weight = self.w.weight
 
     def positional_encoding(self, x):
         pos = torch.arange(0, x.shape[1]) / 10000
@@ -85,9 +94,9 @@ class Transformer(nn.Module):
 
         for layer in self.layers:
             x = layer(x)
- 
+
+        x = self.ln(x)
         x = self.w(x) 
-        x = F.softmax(x, dim=-1)
         return x 
     
 
