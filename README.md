@@ -2,7 +2,7 @@
 
 A small decoder transformer model "from scratch", pre-trained on rap lyrics from [Genius](https://www.kaggle.com/datasets/carlosgdcj/genius-song-lyrics-with-language-information).
 
-Hyperparameters follow [nanoGPT](https://github.com/karpathy/nanoGPT). 
+Hyperparameters & architecture follow [nanoGPT](https://github.com/karpathy/nanoGPT). 
 
 ## Samples
 
