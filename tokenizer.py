@@ -2,6 +2,9 @@ from collections import Counter
 import json 
 
 def tokenize_dataset(data, vocab_size):
+    """
+    Tokenize dataset using byte pair encoding
+    """
     vocab = {
         i: chr(i) for i in set(data)
     }
@@ -16,6 +19,8 @@ def tokenize_dataset(data, vocab_size):
 
     current_vocab_size = len(vocab)
     new_token = max(data) + 1
+
+    assert current_vocab_size < vocab_size, current_vocab_size
 
     while current_vocab_size < vocab_size:
 
@@ -50,16 +55,16 @@ def tokenize_dataset(data, vocab_size):
     return data, vocab 
 
 ### Generate vocab
-# with open("input.txt", "r") as f:
-#     data = f.read()
+with open("lyrics.txt", "r") as f:
+    data = f.read()
 
-# data = data.encode(encoding="ascii")
-# data, vocab = tokenize_dataset(data, vocab_size=256)
+data = data.encode()
+data, vocab = tokenize_dataset(data, vocab_size=256)
 
-# with open("vocab.json", "w") as f:
-#     json.dump(vocab, f)
-# with open("data.json", "w") as f:
-#     json.dump(data, f)
+with open("vocab.json", "w") as f:
+    json.dump(vocab, f)
+with open("data.json", "w") as f:
+    json.dump(data, f)
 
 
 
